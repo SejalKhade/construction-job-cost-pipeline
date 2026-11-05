@@ -9,13 +9,14 @@ import duckdb
 import pytest
 from dagster import materialize
 
-from orchestration.definitions import bronze_checks, bronze_tables, defs, jobcost_dbt_models
-from pipeline import generate_source_data, quality, spark_bronze
+from orchestration.definitions import (bronze_checks, bronze_tables, defs, jobcost_dbt_models,
+                                      pipeline_run_metrics)
+from pipeline import generate_source_data, monitoring, quality, spark_bronze
 from pipeline.config import WAREHOUSE_PATH
 from dagster_dbt import DbtCliResource
 from orchestration.definitions import dbt_project
 
-ASSETS = [bronze_tables, jobcost_dbt_models, *bronze_checks]
+ASSETS = [bronze_tables, jobcost_dbt_models, pipeline_run_metrics, *bronze_checks]
 RESOURCES = {"dbt": DbtCliResource(project_dir=dbt_project)}
 
 
@@ -182,3 +183,33 @@ def test_freshness_flags_stale_feed():
     from datetime import date
     passed, meta = quality.check_freshness("job_cost", expected_latest=date(2026, 10, 15))
     assert not passed and meta["lag_days"] > 1
+
+
+# Monitoring and alerting
+def test_run_metrics_recorded_each_run(runs):
+    rows = q("select fact_rows, alerts from ops.pipeline_run_metrics order by recorded_at")
+    assert len(rows) == 3
+    assert rows[0][0] < rows[1][0] == rows[2][0]
+    assert all(r[1] == 0 for r in rows)          # healthy runs raise no alerts
+
+
+def test_failure_sensor_registered():
+    assert defs.get_sensor_def("alert_on_run_failure") is not None
+
+
+def test_alert_rules_fire():
+    bad = {"quarantine_rate_pct": 5.0, "feed_lag_days": 3, "latest_day_rows": 100, "prior_7d_avg_rows": 3000}
+    titles = [t for t, _ in monitoring.evaluate_rules(bad)]
+    assert titles == ["Quarantine rate above threshold", "Job cost feed is stale", "Daily row volume dropped"]
+
+
+def test_healthy_metrics_raise_no_alert():
+    ok = {"quarantine_rate_pct": 0.9, "feed_lag_days": 0, "latest_day_rows": 3100, "prior_7d_avg_rows": 3000}
+    assert monitoring.evaluate_rules(ok) == []
+
+
+def test_alert_written_to_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(monitoring, "ALERTS_FILE", tmp_path / "alerts.jsonl")
+    monkeypatch.delenv("ALERT_WEBHOOK_URL", raising=False)
+    monitoring.send_alert("test alert", {"x": 1})
+    assert "test alert" in (tmp_path / "alerts.jsonl").read_text()

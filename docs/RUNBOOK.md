@@ -50,6 +50,16 @@ Guide for whoever is on call. Each section says what the alert means, what to ch
 1. Look at the activity's history in `intermediate.int_schedule_validated`.
 2. Confirm with Project Controls whether the lower value is a real correction.
 
+### Alert: "Quarantine rate above threshold", "Job cost feed is stale", or "Daily row volume dropped"
+**Meaning:** a monitoring rule in `pipeline/monitoring.py` was broken on the latest run. Alerts land in `data/alerts.jsonl` and the webhook channel.
+1. Check the trend: `select * from ops.pipeline_run_metrics order by recorded_at desc limit 10`
+2. Volume drop: confirm with the source owner whether the field crews actually logged less (holiday, weather) or the export was partial.
+3. Stale feed or quarantine spike: follow the freshness or quarantine sections above.
+
+### Alert: "Dagster run failed"
+1. Open the run in the Dagster UI and find the first failed step.
+2. Fix the cause, then re-execute from the failed step. Ingestion and dbt are idempotent, so a rerun is safe.
+
 ## Recovery
 
 | Situation | Action |

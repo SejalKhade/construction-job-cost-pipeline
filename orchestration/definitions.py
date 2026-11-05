@@ -9,13 +9,16 @@ Asset graph (each box is visible with lineage in the Dagster UI):
 * dbt tests appear as Dagster asset checks; Bronze also has schema-contract, freshness,
   and completeness checks. A failed ERROR check blocks downstream assets.
 * A daily schedule refreshes the whole graph at 05:30 Central.
+* Monitoring: pipeline_run_metrics records each run and alerts on rule breaks;
+  a run failure sensor alerts when any run fails.
 """
 from dagster import (AssetCheckResult, AssetCheckSeverity, AssetExecutionContext, AssetKey,
                      AssetSpec, DefaultScheduleStatus, Definitions, MaterializeResult,
-                     ScheduleDefinition, asset, asset_check, define_asset_job, multi_asset)
+                     RunFailureSensorContext, ScheduleDefinition, asset, asset_check,
+                     define_asset_job, multi_asset, run_failure_sensor)
 from dagster_dbt import DbtCliResource, DbtProject, dbt_assets
 
-from pipeline import generate_source_data, quality, spark_bronze
+from pipeline import generate_source_data, monitoring, quality, spark_bronze
 from pipeline.config import DAILY_FEEDS, DBT_PROJECT_DIR, REFERENCE_TABLES
 
 dbt_project = DbtProject(project_dir=DBT_PROJECT_DIR, profiles_dir=DBT_PROJECT_DIR)
@@ -77,6 +80,23 @@ def jobcost_dbt_models(context: AssetExecutionContext, dbt: DbtCliResource):
     yield from dbt.cli(["build"], context=context).stream()
 
 
+@asset(group_name="monitoring", deps=[AssetKey(["marts", "mart_project_earned_value"]),
+                                    AssetKey(["marts", "dq_job_cost_quarantine"])],
+       description="One row per run in ops.pipeline_run_metrics; sends alerts when a rule is broken")
+def pipeline_run_metrics(context: AssetExecutionContext):
+    m = monitoring.record_run_metrics(context.run_id)
+    for alert in m["alerts"]:
+        context.log.warning(f"ALERT: {alert}")
+    return MaterializeResult(metadata={k: str(v) for k, v in m.items()})
+
+
+@run_failure_sensor(description="Alerts (log + optional Slack/Teams webhook) when any run fails")
+def alert_on_run_failure(context: RunFailureSensorContext):
+    monitoring.send_alert(f"Dagster run failed: {context.dagster_run.job_name}",
+                          {"run_id": context.dagster_run.run_id,
+                           "error": context.failure_event.message})
+
+
 daily_refresh_job = define_asset_job("daily_job_cost_refresh", selection="*")
 
 daily_schedule = ScheduleDefinition(
@@ -87,9 +107,10 @@ daily_schedule = ScheduleDefinition(
 )
 
 defs = Definitions(
-    assets=[source_landing, bronze_tables, jobcost_dbt_models],
+    assets=[source_landing, bronze_tables, jobcost_dbt_models, pipeline_run_metrics],
     asset_checks=bronze_checks,
     jobs=[daily_refresh_job],
     schedules=[daily_schedule],
+    sensors=[alert_on_run_failure],
     resources={"dbt": DbtCliResource(project_dir=dbt_project)},
 )

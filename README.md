@@ -19,7 +19,7 @@ Project managers need cost and schedule certainty. That depends on two feeds tha
 | Bad progress updates caught | 76 (out of range or a spike that later drops) |
 | Projects scored | 60: 17 on track, 36 watch, 7 at risk |
 | Data-quality checks per run | 43 (37 dbt tests + 6 Dagster Bronze checks) |
-| End-to-end tests | 22 (pytest, run in CI on every push) |
+| End-to-end tests | 27 (pytest, run in CI on every push) |
 
 Every Bronze entry ends up in exactly one place, the fact table or the quarantine. A dbt test proves this on every run.
 
@@ -56,6 +56,15 @@ Dagster runs the whole graph on a daily schedule (05:30 Central). Bronze asset k
 | Accuracy | dbt `unique`, `not_null`, `relationships`, `accepted_values` | Keys, foreign keys to every dimension, allowed values |
 | Business rules | `int_*_validated`, singular tests | No negative cost, cost code must be in the project budget, progress 0 to 100 and never goes backwards, quarantine rate under 2% |
 
+## Monitoring and alerting
+
+| What | How |
+|---|---|
+| Run metrics | `pipeline_run_metrics` asset appends one row per run to `ops.pipeline_run_metrics`: fact rows, new rows, quarantine rate, feed lag, projects at risk, alert count. Ready to chart in Grafana or Power BI |
+| Alert rules | Quarantine rate above 2%, job cost feed more than 1 day stale, latest day's volume more than 50% below the prior 7-day average |
+| Failed runs | Dagster `run_failure_sensor` alerts on any failed run |
+| Delivery | Every alert goes to `data/alerts.jsonl`; set `ALERT_WEBHOOK_URL` to also post to Slack or Teams |
+
 ## Schema evolution and incremental loads
 
 On 2026-09-10 the job cost source starts sending a new `crew_size` column. Nothing breaks:
@@ -87,15 +96,15 @@ cd dbt_project && dbt build --profiles-dir . && dbt docs generate --profiles-dir
 pytest -v
 ```
 
-The suite runs the pipeline three times through Dagster, like three days in production: an initial 40-day load, a 20-day incremental load that brings the schema change, and a rerun with no new files. It checks that every check passes, the new column is appended, the rerun is idempotent, duplicates are removed, the numbers reconcile to Bronze, and the earned value math is correct.
+The suite runs the pipeline three times through Dagster, like three days in production: an initial 40-day load, a 20-day incremental load that brings the schema change, and a rerun with no new files. It checks that every check passes, the new column is appended, the rerun is idempotent, duplicates are removed, the numbers reconcile to Bronze, the earned value math is correct, and run metrics and alert rules work.
 
 ## Project layout
 
 ```
-pipeline/            generate_source_data.py, spark_bronze.py, quality.py, config.py
+pipeline/            generate_source_data.py, spark_bronze.py, quality.py, monitoring.py, config.py
 contracts/           data contracts per source feed
 dbt_project/         staging, intermediate, marts models, schema tests, singular tests
-orchestration/       Dagster assets, asset checks, job, schedule
+orchestration/       Dagster assets, asset checks, job, schedule, failure sensor
 tests/               end-to-end pytest suite
 docs/RUNBOOK.md      on-call guide: what each failure means and how to fix it
 ```
@@ -104,5 +113,5 @@ docs/RUNBOOK.md      on-call guide: what each failure means and how to fix it
 
 - Swap DuckDB for Snowflake or Databricks (dbt adapter change; models stay the same)
 - Land files in Azure Data Lake Storage and run the Spark job on Databricks
-- Send Dagster run and check metrics to Grafana for alerting
+- Grafana dashboard on top of ops.pipeline_run_metrics
 - Daily partitions in Dagster for targeted backfills
