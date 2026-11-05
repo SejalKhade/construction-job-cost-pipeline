@@ -1,0 +1,17 @@
+version: 2
+models:
+  - name: int_job_cost_validated
+    description: Every staged cost row with a dq_reason (null = passed all business rules).
+    columns:
+      - name: dq_reason
+        tests:
+          - accepted_values:
+              arguments:
+                values: [missing_cost_code, unparseable_amount, negative_amount, unknown_project, cost_code_not_in_budget]
+  - name: int_schedule_validated
+    columns:
+      - name: dq_reason
+        tests:
+          - accepted_values:
+              arguments:
+                values: [unparseable_percent, percent_out_of_range, unknown_activity, progress_spike]

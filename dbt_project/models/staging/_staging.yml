@@ -1,0 +1,33 @@
+version: 2
+models:
+  - name: stg_job_cost
+    description: Typed job cost entries, one row per entry_id (re-sent duplicates removed).
+    columns:
+      - name: entry_id
+        tests: [unique, not_null]
+      - name: entry_date
+        tests: [not_null]
+  - name: stg_schedule_progress
+    description: Typed percent-complete snapshots, one row per activity per day.
+  - name: stg_projects
+    columns:
+      - name: project_id
+        tests: [unique, not_null]
+  - name: stg_cost_codes
+    columns:
+      - name: cost_code
+        tests: [unique, not_null]
+      - name: category
+        tests:
+          - accepted_values:
+              arguments:
+                values: [Labor, Equipment, Material, Subcontract]
+  - name: stg_budgets
+    tests:
+      - dbt_utils_free_unique_combination:
+          arguments:
+            columns: [project_id, cost_code]
+  - name: stg_activities
+    columns:
+      - name: activity_id
+        tests: [unique, not_null]

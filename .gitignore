@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/*
+!data/.gitkeep
+dbt_project/target/
+dbt_project/logs/
+dbt_project/.user.yml
+logs/
+.dagster_home/
+spark-warehouse/
+metastore_db/
+derby.log

@@ -1,0 +1,6 @@
+# Data contract agreed with the job cost source owner.
+# Missing a required column = pipeline stops. A new column = warning until reviewed and added here.
+feed: job_cost
+owner: Field Cost Systems
+required_columns: [entry_id, project_id, cost_code, entry_date, quantity, unit_cost, amount, crew_or_vendor]
+optional_columns: [crew_size]   # added 2026-09-10, reviewed and accepted

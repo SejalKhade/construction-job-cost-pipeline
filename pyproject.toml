@@ -1,0 +1,6 @@
+[tool.dagster]
+module_name = "orchestration.definitions"
+code_location_name = "construction_job_cost"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

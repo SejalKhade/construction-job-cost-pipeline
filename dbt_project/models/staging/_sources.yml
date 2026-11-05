@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: Raw Parquet written by the PySpark Bronze job. All business columns are strings.
+    meta:
+      external_location: "read_parquet('{{ env_var('BRONZE_DIR', '../data/bronze') }}/{name}/**/*.parquet', hive_partitioning = true, union_by_name = true)"
+    loaded_at_field: _ingested_at
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 48, period: hour}
+    tables:
+      - name: job_cost
+        description: Daily field cost entries (labor, equipment, material, subcontract), partitioned by entry_date.
+      - name: schedule_progress
+        description: Daily percent-complete snapshot per schedule activity, partitioned by status_date.
+      - name: projects
+        freshness: null
+      - name: cost_codes
+        freshness: null
+      - name: budgets
+        freshness: null
+      - name: activities
+        freshness: null

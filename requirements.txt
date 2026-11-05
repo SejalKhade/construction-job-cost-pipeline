@@ -1,0 +1,10 @@
+dagster==1.13.28
+dagster-webserver==1.13.28
+dagster-dbt==0.29.28
+dbt-core==1.12.6
+dbt-duckdb==1.11.1
+duckdb==2.0.0
+pyspark==3.5.3
+numpy==2.5.3
+PyYAML==6.0.3
+pytest==9.1.1

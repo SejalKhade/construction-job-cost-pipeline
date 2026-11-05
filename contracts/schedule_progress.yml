@@ -1,0 +1,4 @@
+feed: schedule_progress
+owner: Project Controls / Scheduling
+required_columns: [activity_id, project_id, status_date, percent_complete]
+optional_columns: []

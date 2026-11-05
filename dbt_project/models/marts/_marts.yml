@@ -1,0 +1,57 @@
+version: 2
+models:
+  - name: fct_job_cost
+    description: >
+      Fact table of field cost entries that passed every data-quality rule.
+      Incremental (delete+insert on entry_id); new source columns are appended automatically.
+    columns:
+      - name: entry_id
+        tests: [unique, not_null]
+      - name: project_id
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_project'), field: project_id}
+      - name: cost_code
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_cost_code'), field: cost_code}
+      - name: entry_date
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_day}
+      - name: amount
+        tests: [not_null]
+  - name: fct_schedule_progress
+    columns:
+      - name: activity_id
+        tests: [not_null]
+      - name: percent_complete
+        tests: [not_null]
+  - name: dim_project
+    description: One row per project with budget at completion (BAC).
+    columns:
+      - name: project_id
+        tests: [unique, not_null]
+  - name: dim_cost_code
+    columns:
+      - name: cost_code
+        tests: [unique, not_null]
+  - name: dim_date
+    columns:
+      - name: date_day
+        tests: [unique, not_null]
+  - name: dq_job_cost_quarantine
+    description: Rejected cost rows with the reason, kept for review with the data owner.
+  - name: mart_project_earned_value
+    description: Cost and schedule health per project (CPI, SPI, EAC) for project controls.
+    columns:
+      - name: project_id
+        tests: [unique, not_null]
+      - name: health_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['ON TRACK', 'WATCH', 'AT RISK']
